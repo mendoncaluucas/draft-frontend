@@ -168,3 +168,6 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Exceção: rota de código /admin/logs (App Router), não confundir com logs de runtime
+!src/app/(dashboard)/admin/logs/
