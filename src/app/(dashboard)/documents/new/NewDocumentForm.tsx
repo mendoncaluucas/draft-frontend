@@ -253,13 +253,6 @@ export default function NewDocumentForm({ userName, userRole }: NewDocumentFormP
             </span>
           </p>
         </div>
-        {/* Indicador AppSec: token presente */}
-        <div className="ml-auto flex items-center gap-1.5 text-xs text-gray-400">
-          <svg className="h-3.5 w-3.5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-          </svg>
-          Bearer JWT ativo
-        </div>
       </div>
 
       {/* Erro global */}
@@ -497,18 +490,6 @@ export default function NewDocumentForm({ userName, userRole }: NewDocumentFormP
             </button>
           </div>
         </div>
-      </div>
-
-      {/* Nota AppSec visível (educacional, para a avaliação) */}
-      <div className="mt-4 rounded-lg border border-gray-200 bg-white px-4 py-3 text-xs text-gray-500 shadow-sm">
-        <p className="font-semibold text-gray-600 mb-1">🔐 AppSec — Estratégia Bearer JWT</p>
-        <p>
-          O envio usa um <code className="rounded bg-gray-100 px-1 font-mono">Server Action</code>: o token de
-          sessão é lido no servidor a partir do cookie{" "}
-          <code className="rounded bg-gray-100 px-1 font-mono">httpOnly</code> e o header{" "}
-          <code className="rounded bg-gray-100 px-1 font-mono">Authorization: Bearer &lt;token&gt;</code> é injetado{" "}
-          <strong>no servidor</strong> — o token nunca chega ao JavaScript do cliente (RFC 6750).
-        </p>
       </div>
     </form>
   );

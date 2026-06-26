@@ -4,6 +4,14 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { serverFetch } from "@/lib/server-fetch";
 
+// Cores por status: verde = aprovado, vermelho = rejeitado, amarelo = em revisão, cinza = rascunho
+const STATUS_COLORS: Record<string, string> = {
+  RASCUNHO: "bg-gray-100 text-gray-700",
+  EM_REVISAO: "bg-yellow-100 text-yellow-800",
+  APROVADO: "bg-green-100 text-green-800",
+  REJEITADO: "bg-red-100 text-red-800",
+};
+
 export default async function DocumentsPage() {
   // AppSec: Validação de sessão no servidor.
   const session = await auth();
@@ -35,7 +43,7 @@ export default async function DocumentsPage() {
         
         {/* Caixa de Sessão */}
         <div className="mt-6 rounded-md bg-blue-50 p-4 border border-blue-200">
-          <h2 className="text-lg font-semibold text-blue-800">Sessão Ativa (NextAuth v5)</h2>
+          <h2 className="text-lg font-semibold text-blue-800">Sessão Ativa</h2>
           <p className="mt-2 text-gray-700">Bem-vindo(a), <strong>{session.user?.name}</strong>!</p>
           <p className="text-gray-700">E-mail: {session.user?.email}</p>
           <p className="text-gray-700">
@@ -72,7 +80,7 @@ export default async function DocumentsPage() {
                         </Link>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800">
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLORS[doc.status] ?? "bg-gray-100 text-gray-700"}`}>
                           {doc.status}
                         </span>
                       </td>
