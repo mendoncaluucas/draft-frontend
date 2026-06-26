@@ -140,7 +140,7 @@ Os controles acima cobrem as cinco funções do framework de cibersegurança do 
 |---|---|
 | **Identificar** | Definição dos 3 perfis (COLABORADOR, ANALISTA, ADMINISTRADOR), matriz de permissões e classificação dos ativos (senhas, contratos, dados cadastrais, `AuditLog`, segredos). |
 | **Proteger** | Hash bcrypt, validação Zod no servidor, gestão de segredos (`.env` fora do Git + `.env.example`), cookies `HttpOnly`/`Secure`/`SameSite=Lax` e CORS restrito. |
-| **Detectar** | Trilha de auditoria forense (`AuditLog`) com `ipAddress` e `userAgent`, registrando ações sensíveis como `CREATE_DOC`, `UPDATE_DOC`, `DELETE_DOC` e `ACCESS_DENIED` (auditoria de `LOGIN`/`LOGIN_FAILED` e do fluxo de aprovação ainda previstas). |
+| **Detectar** | Trilha de auditoria forense (`AuditLog`) com `ipAddress`, `userAgent` e `details` descritivo, registrando `LOGIN`, `LOGIN_FAILED`, `CREATE_DOC`, `UPDATE_DOC`, `DELETE_DOC`, `SUBMIT`, `APPROVE`, `REJECT`, `CREATE_USER`, `UPDATE_USER`, `DELETE_USER` e `ACCESS_DENIED`. A tela `/admin/logs` (restrita a ADMINISTRADOR) exibe a trilha. |
 | **Responder** | Plano Mínimo de Resposta a Incidente (credencial exposta, `.env` vazado e vazamento do banco). |
 | **Recuperar** | Plano de Backup e Restauração (cópia do arquivo SQLite em dev / `pg_dump` em produção + migrations do Prisma versionadas), reconstruindo o sistema a partir do repositório e dos segredos guardados com segurança. |
 
@@ -166,6 +166,7 @@ Os controles acima cobrem as cinco funções do framework de cibersegurança do 
 |---|---|---|---|
 | **Ausência de Rate Limiting no login** | A rota `/api/auth/login` aceita tentativas ilimitadas, sem bloqueio progressivo. | Força bruta / credential stuffing, sobretudo contra contas ADMIN. | Limitar por IP e por conta (ex.: 5 tentativas/15 min) com bloqueio temporário e registro de `LOGIN_FAILED`. |
 | **JWT sem revogação (logout não invalida no servidor)** | O logout remove o cookie no front, mas o JWT continua válido até expirar (`exp`); não há blacklist no back. | Reuso de uma sessão que o usuário acredita encerrada (janela de sequestro). | Reduzir o `maxAge`, implementar blacklist (memória/Redis) ou rotacionar o `AUTH_SECRET`. |
+| **Escalonamento de privilégio no registro público** *(corrigido)* | A rota `/api/auth/register` aceitava `role` no corpo, permitindo auto-cadastro como `ADMINISTRADOR`. | Qualquer pessoa obteria privilégios de administrador sem autorização. | **Corrigido:** o registro público força `COLABORADOR`; a criação de ADMIN/ANALISTA só ocorre pela rota autenticada `POST /api/admin/users`. |
 
 ---
 
@@ -196,13 +197,47 @@ Os controles acima cobrem as cinco funções do framework de cibersegurança do 
 
 ## 11. Estado Atual (caráter parcial)
 
-A base de autenticação, a estrutura de pastas do front-end e a API estão implementadas. Conforme o checkpoint técnico (22/06), o back-end (`draft-backend`) já está versionado no GitHub, restando a integração final das telas do colaborador e do fluxo de aprovação.
+O sistema está **funcionalmente completo** para o escopo do checkpoint:
 
-**Pendências em fechamento:**
-- [ ] Merge das partes de front-end (formulário de criação e telas de detalhe/RBAC visual).
-- [ ] Substituir os *mock data* da listagem de documentos pela API real.
-- [ ] Telas de administração: `/admin/users` e `/admin/logs`.
-- [ ] Ajustes de metadados do `layout.tsx` e `lang="pt-BR"`.
+- **Autenticação** com sessão server-side (NextAuth v5) e Bearer Token validado no back-end.
+- **CRUD de documentos** com versionamento automático e histórico de versões.
+- **Fluxo de aprovação** completo: `RASCUNHO → EM_REVISAO → APROVADO / REJEITADO`.
+- **Gestão de usuários** (criar, alterar perfil e excluir) restrita a ADMINISTRADOR.
+- **Telas do front** integradas à API real: lista, criação, edição, detalhe, `/admin/users` e `/admin/logs`.
+- **Trilha de auditoria forense** com `ipAddress`, `userAgent` e `details`, visível em `/admin/logs`.
+- **RBAC** por perfil e por dono do recurso (mitigação de IDOR/BOLA), com respostas `403` para acesso indevido.
+
+**Limitações conhecidas** (ver Seção 8 — Achados): ausência de *rate limiting* no login e de revogação de token no logout. Evoluções previstas: MFA para contas administrativas e bloqueio progressivo de tentativas de login.
+
+---
+
+## 12. Evidências (capturas de tela)
+
+> Cada marcador abaixo deve ser substituído pelo print correspondente (ver guia de evidências).
+
+**Evidência 1 — Login e perfil de acesso (RBAC)**
+*[INSERIR PRINT — tela autenticada exibindo nome, e-mail e o perfil de acesso, ex.: ADMINISTRADOR]*
+
+**Evidência 2 — Hash de senha (bcrypt)**
+*[INSERIR PRINT — Prisma Studio, tabela `User`, coluna `passwordHash` com hash iniciando em `$2b$`]*
+
+**Evidência 3 — CRUD: criação e listagem de documentos**
+*[INSERIR PRINT — formulário de novo documento e/ou a lista com o documento criado]*
+
+**Evidência 4 — Versionamento**
+*[INSERIR PRINT — detalhe do documento após edição, mostrando a versão v2 e o histórico]*
+
+**Evidência 5 — Fluxo de aprovação + RBAC visual**
+*[INSERIR PRINT — documento EM_REVISAO com os botões Aprovar/Rejeitar (logado como ANALISTA)]*
+
+**Evidência 6 — Ação bloqueada por falta de permissão (HTTP 403)**
+*[INSERIR PRINT — COLABORADOR acessando `/admin/logs` (ou documento alheio) recebendo 403/Acesso negado]*
+
+**Evidência 7 — Trilha de auditoria forense**
+*[INSERIR PRINT — tela `/admin/logs` com `Ação`, `Usuário`, `Data`, `IP`, `User-Agent` e `Detalhes`]*
+
+**Evidência 8 — Gestão de segredos**
+*[INSERIR PRINT — conteúdo do `.gitignore` com `.env` + saída de `git status` sem o `.env` rastreado]*
 
 ---
 
