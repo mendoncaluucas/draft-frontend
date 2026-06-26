@@ -1,4 +1,4 @@
-# 🚀 Draft — Sistema de Gestão de Documentos (Projeto P06-B)
+# Draft — Sistema de Gestão de Documentos (Projeto P06-B)
 
 ![Next.js](https://img.shields.io/badge/Next.js_14-App_Router-black?style=for-the-badge&logo=next.js)
 ![Tailwind](https://img.shields.io/badge/Tailwind_CSS-Styling-38B2AC?style=for-the-badge&logo=tailwind-css)
@@ -13,7 +13,7 @@ Sistema web para **gestão de documentos** (contratos e termos fictícios) com v
 
 ---
 
-## 📦 Repositórios do Sistema
+## Repositórios do Sistema
 
 | Projeto | Repositório | Porta | Stack |
 |---|---|---|---|
@@ -35,46 +35,31 @@ git clone https://github.com/mendoncaluucas/draft-backend.git
 
 ---
 
-## ✅ Pré-requisitos
+## Pré-requisitos
 
 - **Node.js 18+** e **npm** — `node -v` / `npm -v`
-- **PostgreSQL 14+** — `psql --version`
-  > Para desenvolvimento local também é possível usar **SQLite**; nesse caso ajuste o `provider` no `schema.prisma` e a `DATABASE_URL` (ex.: `file:./dev.db`).
 - **Git**
+  > O banco de **desenvolvimento** é **SQLite** (arquivo local, sem instalação). **PostgreSQL** é o alvo de produção — se for usá-lo, ajuste o `provider` no `schema.prisma` e a `DATABASE_URL`.
 
 ---
 
-## 🗄️ Passo 1 — Banco de Dados (PostgreSQL)
+## Passo 1 — Banco de Dados (SQLite)
 
-1. Garanta que o serviço do PostgreSQL está rodando:
-   - **Linux:** `sudo systemctl start postgresql`
-   - **macOS (Homebrew):** `brew services start postgresql`
-   - **Windows:** o serviço sobe junto com a instalação.
+O projeto usa **SQLite** em desenvolvimento: um único arquivo (`prisma/dev.db`), criado automaticamente pelo Prisma. **Não há servidor de banco para instalar** — o banco e as tabelas nascem ao rodar as migrations no Passo 2.
 
-2. Crie o banco `draft` e um usuário para a aplicação:
+A `DATABASE_URL` (configurada no `.env` do back-end, Passo 2) é simplesmente:
 
-   ```bash
-   psql -U postgres
-   ```
-
-   ```sql
-   CREATE DATABASE draft;
-   CREATE USER draft_user WITH ENCRYPTED PASSWORD 'troque_esta_senha';
-   GRANT ALL PRIVILEGES ON DATABASE draft TO draft_user;
-   \q
-   ```
-
-3. A `DATABASE_URL` resultante (usada no Passo 2):
-
-   ```
-   postgresql://draft_user:troque_esta_senha@localhost:5432/draft
-   ```
+```
+file:./dev.db
+```
 
 > As tabelas (`User`, `Document`, `DocumentVersion`, `AuditLog`, `Comment`) são criadas automaticamente pelas **migrations do Prisma** no Passo 2 — não crie tabela manualmente.
+>
+> **Produção:** para usar PostgreSQL, troque o `provider` para `postgresql` no `schema.prisma` e aponte a `DATABASE_URL` para o servidor (`postgresql://usuario:senha@host:5432/draft`).
 
 ---
 
-## 🔧 Passo 2 — Back-end (API — `draft-backend`, porta 3001)
+## Passo 2 — Back-end (API — `draft-backend`, porta 3001)
 
 1. Instale as dependências:
 
@@ -90,12 +75,12 @@ git clone https://github.com/mendoncaluucas/draft-backend.git
    ```
 
    ```env
-   # Banco de dados (mesma string do Passo 1)
-   DATABASE_URL="postgresql://draft_user:troque_esta_senha@localhost:5432/draft"
+   # Banco de dados (SQLite em desenvolvimento — arquivo local)
+   DATABASE_URL="file:./dev.db"
 
    # Segredo de assinatura/validação do JWT — mín. 32 caracteres.
    # DEVE ser IDÊNTICO ao do front-end (o back valida o Bearer com ele).
-   NEXTAUTH_SECRET="sua-chave-super-segura-de-no-minimo-32-caracteres"
+   AUTH_SECRET="sua-chave-super-segura-de-no-minimo-32-caracteres"
 
    NEXTAUTH_URL="http://localhost:3000"
    ```
@@ -123,11 +108,11 @@ git clone https://github.com/mendoncaluucas/draft-backend.git
 
    A API responde em **http://localhost:3001**. Deixe este terminal aberto.
 
-> 💡 Inspecionar o banco visualmente: `npx prisma studio`.
+> Inspecionar o banco visualmente: `npx prisma studio`.
 
 ---
 
-## 💻 Passo 3 — Front-end (Interface — `draft-frontend`, porta 3000)
+## Passo 3 — Front-end (Interface — `draft-frontend`, porta 3000)
 
 1. Em **outro terminal**:
 
@@ -146,13 +131,13 @@ git clone https://github.com/mendoncaluucas/draft-backend.git
    # Endereço da API (back-end) para as requisições cross-origin
    NEXT_PUBLIC_API_URL="http://localhost:3001"
 
-   # MESMO valor de NEXTAUTH_SECRET usado no back-end
-   NEXTAUTH_SECRET="sua-chave-super-segura-de-no-minimo-32-caracteres"
+   # MESMO valor de AUTH_SECRET usado no back-end
+   AUTH_SECRET="sua-chave-super-segura-de-no-minimo-32-caracteres"
 
    NEXTAUTH_URL="http://localhost:3000"
    ```
 
-   > ⚠️ O `NEXTAUTH_SECRET` precisa ser **exatamente igual** nos dois projetos. Se divergir, o back-end rejeita o Bearer Token e o login falha.
+   >  O `AUTH_SECRET` precisa ser **exatamente igual** nos dois projetos. Se divergir, o back-end rejeita o Bearer Token e o login falha.
 
 3. Suba a interface na porta **3000**:
 
@@ -162,7 +147,7 @@ git clone https://github.com/mendoncaluucas/draft-backend.git
 
 ---
 
-## 🌐 Passo 4 — Acessar o Sistema
+## Passo 4 — Acessar o Sistema
 
 1. Acesse **http://localhost:3000** (a raiz redireciona para **`/login`**).
 2. Faça login com um usuário existente (ou criado pelo seed/cadastro).
@@ -170,36 +155,36 @@ git clone https://github.com/mendoncaluucas/draft-backend.git
 
 ---
 
-## 🔑 Variáveis de Ambiente (resumo)
+## Variáveis de Ambiente (resumo)
 
 | Variável | Projeto | Descrição |
 |---|---|---|
-| `DATABASE_URL` | Back-end | String de conexão do PostgreSQL (banco `draft`) |
-| `NEXTAUTH_SECRET` | Back-end **e** Front-end | Segredo do JWT — **idêntico** nos dois |
+| `DATABASE_URL` | Back-end | Conexão do banco — `file:./dev.db` (SQLite/dev) ou `postgresql://...` (produção) |
+| `AUTH_SECRET` | Back-end **e** Front-end | Segredo do JWT — **idêntico** nos dois |
 | `NEXTAUTH_URL` | Back-end e Front-end | URL base do front (`http://localhost:3000`) |
 | `NEXT_PUBLIC_API_URL` | Front-end | Endereço da API (`http://localhost:3001`) |
 
-> ℹ️ **Atenção ao nome do segredo:** o NextAuth.js **v5** pode esperar a variável como `AUTH_SECRET` em vez de `NEXTAUTH_SECRET`. Confirme no código (`src/auth.ts`) qual nome é lido e padronize o mesmo nos dois `.env`. O `.env.example` do projeto usa `NEXTAUTH_SECRET`.
+> **Nome do segredo:** este projeto usa **NextAuth v5 (Auth.js)**, cuja variável é **`AUTH_SECRET`** (ver `src/auth.ts`). Se o `.env.example` versionado ainda estiver com `NEXTAUTH_SECRET`, alinhe os dois para o mesmo nome para evitar falha de login.
 
 ---
 
-## 🛠️ Solução de Problemas (Troubleshooting)
+## Solução de Problemas (Troubleshooting)
 
 | Sintoma | Causa provável | Solução |
 |---|---|---|
-| Login falha mesmo com credenciais corretas | Front não acha a API, ou segredo divergente | Confira a API na `3001`, o `NEXT_PUBLIC_API_URL` e o `NEXTAUTH_SECRET` igual nos dois |
-| `401 Unauthorized` nas chamadas à API | `NEXTAUTH_SECRET` diferente entre front e back | Iguale o segredo nos dois `.env` |
+| Login falha mesmo com credenciais corretas | Front não acha a API, ou segredo divergente | Confira a API na `3001`, o `NEXT_PUBLIC_API_URL` e o `AUTH_SECRET` igual nos dois |
+| `401 Unauthorized` nas chamadas à API | `AUTH_SECRET` diferente entre front e back | Iguale o segredo nos dois `.env` |
 | Requisição bloqueada por CORS | Origem fora de `http://localhost:3000` | Acesse pelo front na 3000; ajuste o CORS do back se mudar a porta |
-| Erro ao subir o back-end | Banco fora do ar / `DATABASE_URL` errada | Verifique o serviço do Postgres e a string de conexão |
-| `prisma migrate` falha | Usuário sem permissão no banco | Reveja o `GRANT` do Passo 1 |
+| Erro ao subir o back-end | `DATABASE_URL` errada / migrations não aplicadas | Confira a `DATABASE_URL` e rode `npx prisma migrate dev` |
+| `prisma migrate` falha | Schema/permissão incorretos | Reveja o `provider` e a `DATABASE_URL` no `schema.prisma` |
 | Porta 3000/3001 já em uso | Outro processo na porta | Encerre o processo ou troque a porta |
 
 ---
 
-## 🔐 Documentação de Segurança (SecOps)
+## Documentação de Segurança (SecOps)
 
 Documentos complementares em [`/docs`](./docs):
 
-- 📄 [Relatório Técnico Parcial](./docs/RELATORIO-TECNICO-PARCIAL.md) — arquitetura atual do sistema.
-- 🚨 [Plano Mínimo de Resposta a Incidente](./docs/PLANO-RESPOSTA-INCIDENTE.md) — credencial exposta / `.env` vazado.
-- 💾 [Plano de Backup e Restauração](./docs/PLANO-BACKUP-RESTAURACAO.md) — Prisma / PostgreSQL.
+- [Relatório Técnico Parcial](./docs/RELATORIO-TECNICO-PARCIAL.md) — arquitetura atual do sistema.
+- [Plano Mínimo de Resposta a Incidente](./docs/PLANO-RESPOSTA-INCIDENTE.md) — credencial exposta / `.env` vazado.
+- [Plano de Backup e Restauração](./docs/PLANO-BACKUP-RESTAURACAO.md) — Prisma / PostgreSQL.
