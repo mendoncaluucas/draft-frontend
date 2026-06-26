@@ -29,3 +29,20 @@ export async function deleteUser(formData: FormData) {
   await serverFetch(`/api/admin/users/${id}`, { method: "DELETE" })
   revalidatePath("/admin/users")
 }
+
+export async function updateUserRole(formData: FormData) {
+  const id = formData.get("userId") as string
+  const role = formData.get("role") as string
+
+  const res = await serverFetch(`/api/admin/users/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ role }),
+  })
+
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}))
+    throw new Error(json.error ?? "Falha ao alterar o perfil")
+  }
+
+  revalidatePath("/admin/users")
+}

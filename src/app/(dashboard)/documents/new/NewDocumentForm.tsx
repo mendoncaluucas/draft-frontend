@@ -1,12 +1,13 @@
 // src/app/(dashboard)/documents/new/NewDocumentForm.tsx
 //
-// CLIENT COMPONENT — formulário interativo
-// O rawToken (JWT) é recebido via prop do Server Component pai.
-// Nunca acessamos document.cookie, localStorage ou window.__session.
+// CLIENT COMPONENT — formulário interativo.
+// O envio é feito por um Server Action (createDocument): o token de sessão
+// fica SOMENTE no servidor (cookie httpOnly), nunca exposto ao JS do cliente.
 "use client";
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { createDocument } from "./actions";
 
 // Tipos locais para o formulário
 type DocumentType = "CONTRATO" | "TERMO" | "ADITIVO" | "MEMORANDO";
@@ -25,7 +26,6 @@ interface FormValues {
 type ZodFieldErrors = Record<string, string[]>;
 
 interface NewDocumentFormProps {
-  rawToken: string | null;
   userName: string;
   userRole: string;
 }
@@ -67,7 +67,7 @@ function parseZodErrors(body: unknown): ZodFieldErrors | null {
 // -------------------------------------------------------------------
 // Componente
 // -------------------------------------------------------------------
-export default function NewDocumentForm({ rawToken, userName, userRole }: NewDocumentFormProps) {
+export default function NewDocumentForm({ userName, userRole }: NewDocumentFormProps) {
   const router = useRouter();
 
   const [form, setForm]             = useState<FormValues>(INITIAL_FORM);
@@ -98,7 +98,7 @@ export default function NewDocumentForm({ rawToken, userName, userRole }: NewDoc
   );
 
   // ----------------------------------------------------------------
-  // Submit → fetch() com Authorization: Bearer <token>
+  // Submit → Server Action (token tratado no servidor)
   // ----------------------------------------------------------------
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,35 +106,22 @@ export default function NewDocumentForm({ rawToken, userName, userRole }: NewDoc
     setGlobalError(null);
     setFieldErrors({});
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
-
     try {
-      // AppSec: O JWT é injetado exclusivamente via header Authorization.
-      // Nunca é exposto em cookies de JavaScript, variáveis globais ou
-      // query strings — segue a estratégia Bearer do RFC 6750.
-      const res = await fetch(`${apiUrl}/api/documents`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(rawToken ? { Authorization: `Bearer ${rawToken}` } : {}),
-        },
-        body: JSON.stringify({
-          title:          form.title.trim(),
-          description:    form.description.trim(),
-          type:           form.type,
-          content:        form.content.trim(),
-          parties:        form.parties.trim(),
-          effectiveDate:  form.effectiveDate || undefined,
-          expirationDate: form.expirationDate || undefined,
-        }),
+      // AppSec: o envio vai por um Server Action. O serverFetch lê o token do
+      // cookie httpOnly e injeta o header Authorization NO SERVIDOR — o token
+      // nunca chega ao JavaScript do cliente (estratégia Bearer, RFC 6750).
+      const result = await createDocument({
+        title:          form.title.trim(),
+        description:    form.description.trim(),
+        type:           form.type,
+        content:        form.content.trim(),
+        parties:        form.parties.trim(),
+        effectiveDate:  form.effectiveDate || undefined,
+        expirationDate: form.expirationDate || undefined,
       });
 
-      let body: unknown;
-      try {
-        body = await res.json();
-      } catch {
-        body = null;
-      }
+      const res = { status: result.status, ok: result.ok };
+      const body = result.body;
 
       // ── 400 Bad Request — erros de validação do Zod ──────────────
       if (res.status === 400) {
@@ -400,7 +387,7 @@ export default function NewDocumentForm({ rawToken, userName, userRole }: NewDoc
                 value={form.parties}
                 onChange={(e) => set("parties", e.target.value)}
               />
-              <p className="mt-1 text-xs text-gray-400">Use dados fictícios. Separe as partes com "|".</p>
+              <p className="mt-1 text-xs text-gray-400">Use dados fictícios. Separe as partes com &quot;|&quot;.</p>
               <FieldError name="parties" />
             </div>
 
@@ -516,12 +503,11 @@ export default function NewDocumentForm({ rawToken, userName, userRole }: NewDoc
       <div className="mt-4 rounded-lg border border-gray-200 bg-white px-4 py-3 text-xs text-gray-500 shadow-sm">
         <p className="font-semibold text-gray-600 mb-1">🔐 AppSec — Estratégia Bearer JWT</p>
         <p>
-          O token de sessão é lido no servidor (Server Component) via{" "}
-          <code className="rounded bg-gray-100 px-1 font-mono">next-auth/jwt · getToken()</code> e repassado
-          apenas como prop. O cliente nunca acessa <code className="rounded bg-gray-100 px-1 font-mono">document.cookie</code>{" "}
-          nem variáveis globais. O header{" "}
-          <code className="rounded bg-gray-100 px-1 font-mono">Authorization: Bearer &lt;token&gt;</code> é injetado
-          exclusivamente no momento do <code className="rounded bg-gray-100 px-1 font-mono">fetch()</code>, conforme RFC 6750.
+          O envio usa um <code className="rounded bg-gray-100 px-1 font-mono">Server Action</code>: o token de
+          sessão é lido no servidor a partir do cookie{" "}
+          <code className="rounded bg-gray-100 px-1 font-mono">httpOnly</code> e o header{" "}
+          <code className="rounded bg-gray-100 px-1 font-mono">Authorization: Bearer &lt;token&gt;</code> é injetado{" "}
+          <strong>no servidor</strong> — o token nunca chega ao JavaScript do cliente (RFC 6750).
         </p>
       </div>
     </form>

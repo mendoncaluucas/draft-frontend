@@ -2,7 +2,7 @@ import { auth } from "@/auth"
 import { redirect } from "next/navigation"
 import { serverFetch } from "@/lib/server-fetch"
 import type { User } from "@/types"
-import { createUser, deleteUser } from "./actions"
+import { createUser, deleteUser, updateUserRole } from "./actions"
 
 const ROLE_LABELS: Record<string, string> = {
   COLABORADOR: "Colaborador",
@@ -97,16 +97,39 @@ export default async function AdminUsersPage() {
                       {new Date(user.createdAt).toLocaleDateString("pt-BR")}
                     </td>
                     <td className="px-6 py-4">
-                      {user.id !== session.user.id && (
-                        <form action={deleteUser}>
-                          <input type="hidden" name="userId" value={user.id} />
-                          <button
-                            type="submit"
-                            className="text-xs text-red-600 hover:text-red-800 hover:underline"
-                          >
-                            Remover
-                          </button>
-                        </form>
+                      {user.id !== session.user.id ? (
+                        <div className="flex items-center gap-4">
+                          {/* Editar perfil (RBAC: só ADMIN chega aqui; o back também valida) */}
+                          <form action={updateUserRole} className="flex items-center gap-1.5">
+                            <input type="hidden" name="userId" value={user.id} />
+                            <select
+                              name="role"
+                              defaultValue={user.role}
+                              className="rounded-md border px-2 py-1 text-xs shadow-sm focus:border-blue-500 focus:outline-none"
+                            >
+                              <option value="COLABORADOR">Colaborador</option>
+                              <option value="ANALISTA">Analista</option>
+                              <option value="ADMINISTRADOR">Administrador</option>
+                            </select>
+                            <button
+                              type="submit"
+                              className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                            >
+                              Salvar
+                            </button>
+                          </form>
+                          <form action={deleteUser}>
+                            <input type="hidden" name="userId" value={user.id} />
+                            <button
+                              type="submit"
+                              className="text-xs text-red-600 hover:text-red-800 hover:underline"
+                            >
+                              Remover
+                            </button>
+                          </form>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
                       )}
                     </td>
                   </tr>

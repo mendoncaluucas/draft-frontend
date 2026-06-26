@@ -4,17 +4,13 @@
 // ====================================================
 // Responsabilidades desta página:
 //   1. Formulário de criação de contratos/termos fictícios
-//   2. Submit via fetch() para o back-end em :3001
-//   3. JWT extraído da sessão NextAuth no Server Component pai e
-//      repassado para o Client Component filho → injetado como
-//      Authorization: Bearer <token> — a sessão NUNCA fica exposta
-//      ao JavaScript global do cliente (window.__session etc.)
-//   4. Erros 400 do Zod são desestruturados e exibidos campo a campo
+//   2. Submit via Server Action (createDocument) — o token de sessão fica
+//      SOMENTE no servidor (cookie httpOnly via serverFetch), nunca exposto
+//      ao JavaScript do cliente
+//   3. Erros 400 do Zod são desestruturados e exibidos campo a campo
 
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { getToken } from "next-auth/jwt";
-import { headers } from "next/headers";
 import NewDocumentForm from "./NewDocumentForm";
 
 // Server Component: valida sessão e extrai o JWT de forma segura no servidor
@@ -25,17 +21,6 @@ export default async function NewDocumentPage() {
   if (!session) {
     redirect("/login");
   }
-
-  // AppSec: O token JWT é lido no servidor (next-auth/jwt), nunca exposto
-  // ao JavaScript do cliente como variável global. Apenas o valor do token
-  // é repassado como prop ao Client Component para compor o header Bearer.
-  const req = { headers: Object.fromEntries(headers()) } as Parameters<typeof getToken>[0]["req"];
-  // Passando raw: true, o NextAuth retorna diretamente a string do token
-  const rawToken = await getToken({
-    req,
-    secret: process.env.NEXTAUTH_SECRET!,
-    raw: true,
-  }) as string | null;
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 sm:p-10">
@@ -57,9 +42,8 @@ export default async function NewDocumentPage() {
           </p>
         </div>
 
-        {/* Client Component que faz o fetch com Bearer token */}
+        {/* Client Component: submete via Server Action (token só no servidor) */}
         <NewDocumentForm
-          rawToken={rawToken}
           userName={session.user?.name ?? ""}
           userRole={session.user?.role ?? ""}
         />

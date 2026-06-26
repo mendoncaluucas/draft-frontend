@@ -34,8 +34,8 @@ export default function RegisterPage() {
 
       // Redireciona para o login após sucesso
       router.push("/login");
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha no registro");
     } finally {
       setLoading(false);
     }

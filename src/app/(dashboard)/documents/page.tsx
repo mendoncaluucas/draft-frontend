@@ -1,8 +1,8 @@
 // src/app/(dashboard)/documents/page.tsx
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { getToken } from "next-auth/jwt";
-import { headers } from "next/headers";
+import Link from "next/link";
+import { serverFetch } from "@/lib/server-fetch";
 
 export default async function DocumentsPage() {
   // AppSec: Validação de sessão no servidor.
@@ -13,26 +13,11 @@ export default async function DocumentsPage() {
     redirect("/login");
   }
 
-  // 1. Extrai o token de forma segura (sem expor para o navegador)
-  const req = { headers: Object.fromEntries(headers()) } as Parameters<typeof getToken>[0]["req"];
-  const rawToken = await getToken({
-    req,
-    secret: process.env.NEXTAUTH_SECRET!,
-    raw: true,
-  }) as string | null;
-
-  // 2. Bate na porta do Back-end para buscar os documentos
-  let documents: any[] = [];
+  // AppSec: busca os documentos via serverFetch — o token de sessão é lido do
+  // cookie httpOnly no servidor e injetado como Bearer, nunca exposto ao cliente.
+  let documents: { id: string; title: string; status: string; currentVersion: number; owner?: { name?: string } }[] = [];
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/documents`, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${rawToken}`,
-        "Content-Type": "application/json",
-      },
-      cache: "no-store", // Garante que a lista esteja sempre 100% atualizada (sem cache)
-    });
-
+    const response = await serverFetch("/api/documents");
     if (response.ok) {
       const json = await response.json();
       documents = json.data || [];
@@ -75,12 +60,17 @@ export default async function DocumentsPage() {
                     <th className="px-6 py-4 font-semibold text-gray-900">Status</th>
                     <th className="px-6 py-4 font-semibold text-gray-900">Versão</th>
                     <th className="px-6 py-4 font-semibold text-gray-900">Autor</th>
+                    <th className="px-6 py-4 font-semibold text-gray-900 text-right">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {documents.map((doc) => (
                     <tr key={doc.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 font-medium text-gray-900">{doc.title}</td>
+                      <td className="px-6 py-4 font-medium">
+                        <Link href={`/documents/${doc.id}`} className="text-blue-600 hover:text-blue-800 hover:underline">
+                          {doc.title}
+                        </Link>
+                      </td>
                       <td className="px-6 py-4">
                         <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800">
                           {doc.status}
@@ -88,6 +78,14 @@ export default async function DocumentsPage() {
                       </td>
                       <td className="px-6 py-4 text-gray-600">v{doc.currentVersion}</td>
                       <td className="px-6 py-4 text-gray-600">{doc.owner?.name || "Desconhecido"}</td>
+                      <td className="px-6 py-4 text-right">
+                        <Link
+                          href={`/documents/${doc.id}`}
+                          className="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition-colors"
+                        >
+                          Abrir
+                        </Link>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
