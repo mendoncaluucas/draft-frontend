@@ -33,15 +33,16 @@ Browser (usuário)
 │  Next.js 14 (App Router) │                                                    │  BACK-END  (:3001)       │
 │  • React + Tailwind      │ ◀─────────────────────────────────────────────── │  Next.js 14 (API Routes) │
 │  • NextAuth.js v5        │              JSON { data | error }                 │  • CORS restrito         │
-│  • Sessão (cookie seguro)│                                                    │  • Middleware Auth (JWT) │
-└──────────────────────────┘                                                    │  • Middleware RBAC       │
+│  • Sessão (cookie seguro)│                                                    │  • Auth por rota (JWT)   │
+└──────────────────────────┘                                                    │  • RBAC por rota         │
                                                                                 │  • Zod (validação)       │
                                                                                 │  • bcryptjs (hash)       │
                                                                                 └────────────┬─────────────┘
                                                                                              │ Prisma ORM
                                                                                              ▼
                                                                                 ┌──────────────────────────┐
-                                                                                │  PostgreSQL (SQLite local)│
+                                                                                │  SQLite (dev) / Postgres │
+                                                                                │  (alvo de produção)      │
                                                                                 └──────────────────────────┘
 ```
 
@@ -52,7 +53,7 @@ Browser (usuário)
 | Validação | Zod | Validação de todos os inputs nas API Routes |
 | Hash de senha | bcryptjs | Senhas nunca em texto puro |
 | ORM | Prisma | Abstração e migrations do banco |
-| Banco | PostgreSQL (SQLite local) | Persistência |
+| Banco | SQLite (dev) / PostgreSQL (produção) | Persistência |
 | Sessão | NextAuth.js v5 | Cookie seguro + JWT |
 
 ---
@@ -81,21 +82,21 @@ sequenceDiagram
     participant F as Front-end (:3000)
     participant N as NextAuth (Server)
     participant B as Back-end (:3001)
-    participant DB as PostgreSQL
+    participant DB as SQLite (dev)
 
     U->>F: Login (e-mail + senha) em /login
     F->>B: POST /auth/login { email, password }
     B->>DB: Busca usuário (Prisma)
     B->>B: bcrypt.compare(senha, passwordHash)
     B-->>N: 200 { data: { id, role, ... } }
-    N-->>U: Cookie HttpOnly + Secure + SameSite=Strict (JWT)
+    N-->>U: Cookie HttpOnly + Secure + SameSite=Lax (JWT)
 
     Note over F,B: Requisição autenticada a recurso protegido
     U->>F: Acessa /documents
-    F->>N: getServerSession() (no servidor)
+    F->>N: auth() (no servidor, NextAuth v5)
     N-->>F: JWT da sessão (nunca no JS do cliente)
     F->>B: GET /documents — Authorization: Bearer <JWT>
-    B->>B: CORS (Origin == :3000) → Auth (valida JWT c/ NEXTAUTH_SECRET) → RBAC (role)
+    B->>B: CORS (Origin == :3000) → Auth por rota (valida JWT c/ AUTH_SECRET) → RBAC (role)
     alt Token ausente/expirado/adulterado
         B-->>F: 401 Unauthorized
     else Sem permissão
@@ -108,9 +109,9 @@ sequenceDiagram
 ```
 
 **Pontos-chave de AppSec no fluxo:**
-- O JWT é extraído **no servidor** (`getServerSession`) e injetado como `Authorization: Bearer <JWT>`, nunca trafegando pelo JavaScript do cliente.
+- O JWT é extraído **no servidor** (`auth()`, NextAuth v5) e injetado como `Authorization: Bearer <JWT>`, nunca trafegando pelo JavaScript do cliente.
 - Como front (:3000) e back (:3001) são origens diferentes, a *Same-Origin Policy* impede cookies automáticos; por isso a estratégia **Bearer Token**.
-- O back-end compartilha o **`NEXTAUTH_SECRET`** com o front para validar a assinatura do token.
+- O back-end compartilha o **`AUTH_SECRET`** com o front para validar a assinatura do token.
 - **CORS rígido** no back-end aceita apenas `Origin: http://localhost:3000`.
 
 ---
@@ -120,14 +121,14 @@ sequenceDiagram
 | Controle | Onde | Mitiga |
 |---|---|---|
 | **Hash de senha (bcryptjs)** | Back-end / `User.passwordHash` | Vazamento de credenciais em texto puro |
-| **Autorização por perfil (RBAC)** | Middleware em todas as API Routes | Escalonamento de privilégios |
+| **Autorização por perfil (RBAC)** | Verificação de `role` dentro de cada API Route protegida | Escalonamento de privilégios |
 | **Autorização por dono do recurso** | Endpoints de documento (`ownerId === userId`) | **BOLA/IDOR** (acesso a documento alheio) → 403 |
 | **Validação no servidor (Zod)** | Início de cada handler | Injeção / payloads malformados → 400 |
-| **Cookie blindado** | NextAuth (`HttpOnly`, `Secure`, `SameSite=Strict`) | XSS (roubo de sessão) e CSRF |
-| **Bearer Token server-side** | Front extrai JWT via `getServerSession` | Vazamento de token para o JS do cliente |
+| **Cookie blindado** | NextAuth (`HttpOnly`, `Secure`, `SameSite=Lax` — padrão v5) | XSS (roubo de sessão) e CSRF |
+| **Bearer Token server-side** | Front extrai JWT via `auth()` | Vazamento de token para o JS do cliente |
 | **CORS restrito** | Middleware do back-end | Acesso direto à API por origens não autorizadas |
 | **Logs de auditoria forense** | `AuditLog` com `ipAddress` + `userAgent` | Perda de rastreabilidade / quebra de Não-Repúdio |
-| **Gestão de segredos** | `.env` no `.gitignore` + `.env.example` versionado | Exposição de `DATABASE_URL` / `NEXTAUTH_SECRET` |
+| **Gestão de segredos** | `.env` no `.gitignore` + `.env.example` versionado | Exposição de `DATABASE_URL` / `AUTH_SECRET` |
 
 ---
 
@@ -138,14 +139,62 @@ Os controles acima cobrem as cinco funções do framework de cibersegurança do 
 | Função | Como o Draft atende |
 |---|---|
 | **Identificar** | Definição dos 3 perfis (COLABORADOR, ANALISTA, ADMINISTRADOR), matriz de permissões e classificação dos ativos (senhas, contratos, dados cadastrais, `AuditLog`, segredos). |
-| **Proteger** | Hash bcrypt, validação Zod no servidor, gestão de segredos (`.env` fora do Git + `.env.example`), cookies `HttpOnly`/`Secure`/`SameSite=Strict` e CORS restrito. |
-| **Detectar** | Trilha de auditoria forense (`AuditLog`) com `ipAddress` e `userAgent`, registrando ações sensíveis como `LOGIN`, `ACCESS_DENIED`, `APPROVE`, `REJECT` e `DELETE_DOC`. |
+| **Proteger** | Hash bcrypt, validação Zod no servidor, gestão de segredos (`.env` fora do Git + `.env.example`), cookies `HttpOnly`/`Secure`/`SameSite=Lax` e CORS restrito. |
+| **Detectar** | Trilha de auditoria forense (`AuditLog`) com `ipAddress` e `userAgent`, registrando ações sensíveis como `CREATE_DOC`, `UPDATE_DOC`, `DELETE_DOC` e `ACCESS_DENIED` (auditoria de `LOGIN`/`LOGIN_FAILED` e do fluxo de aprovação ainda previstas). |
 | **Responder** | Plano Mínimo de Resposta a Incidente (credencial exposta, `.env` vazado e vazamento do banco). |
-| **Recuperar** | Plano de Backup e Restauração (dump do PostgreSQL + migrations do Prisma versionadas), reconstruindo o sistema a partir do repositório e dos segredos guardados com segurança. |
+| **Recuperar** | Plano de Backup e Restauração (cópia do arquivo SQLite em dev / `pg_dump` em produção + migrations do Prisma versionadas), reconstruindo o sistema a partir do repositório e dos segredos guardados com segurança. |
 
 ---
 
-## 7. Estado Atual (caráter parcial)
+## 7. Classificação de Ativos e Dados Sensíveis
+
+| Ativo | Classificação | Onde fica | Risco principal |
+|---|---|---|---|
+| Senhas dos usuários | Restrito | DB — `User.passwordHash` (bcrypt) | Vazamento de credenciais; ataque de rainbow table se o salt for fraco |
+| Conteúdo dos contratos | Confidencial | DB — `DocumentVersion` | Acesso indevido expõe dados contratuais |
+| Dados cadastrais (nome, e-mail) | Confidencial | DB — `User` | Exposição de PII; enumeração de usuários via API |
+| Logs de auditoria | Interno | DB — `AuditLog` | Perda de rastreabilidade e quebra do Não-Repúdio |
+| `AUTH_SECRET` | Restrito | Variável de ambiente (`.env`) | Falsificação de tokens; atacante assina JWTs arbitrários |
+| `DATABASE_URL` | Restrito | Variável de ambiente (`.env`) | Acesso direto e irrestrito ao banco |
+| Token de sessão | Confidencial / Crítico | Cookie HttpOnly no browser | Sequestro de sessão (Session Hijacking) |
+
+---
+
+## 8. Relatório de Achados e Limitações (Autoauditoria)
+
+| Achado | Evidência | Risco | Recomendação |
+|---|---|---|---|
+| **Ausência de Rate Limiting no login** | A rota `/api/auth/login` aceita tentativas ilimitadas, sem bloqueio progressivo. | Força bruta / credential stuffing, sobretudo contra contas ADMIN. | Limitar por IP e por conta (ex.: 5 tentativas/15 min) com bloqueio temporário e registro de `LOGIN_FAILED`. |
+| **JWT sem revogação (logout não invalida no servidor)** | O logout remove o cookie no front, mas o JWT continua válido até expirar (`exp`); não há blacklist no back. | Reuso de uma sessão que o usuário acredita encerrada (janela de sequestro). | Reduzir o `maxAge`, implementar blacklist (memória/Redis) ou rotacionar o `AUTH_SECRET`. |
+
+---
+
+## 9. Plano Mínimo de Resposta a Incidente (cenário-foco)
+
+> Resumo orientado ao cenário mais crítico. O plano completo está em [`PLANO-RESPOSTA-INCIDENTE.md`](./PLANO-RESPOSTA-INCIDENTE.md).
+
+**Cenário:** *Vazamento de credencial administrativa* — suspeita de que a senha de um `ADMINISTRADOR` foi comprometida.
+
+1. **Detecção:** análise do `AuditLog` — logins do admin de `ipAddress`/`userAgent` incomuns, em horários atípicos; sequência de `ACCESS_DENIED` seguida de `LOGIN` bem-sucedido.
+2. **Evidências a verificar:** registros do `AuditLog` filtrados pelo `userId` da conta, com foco em `ipAddress`, `userAgent` e `createdAt`; reconstruir a linha do tempo das ações.
+3. **1ª contenção:** forçar redefinição de senha e encerrar sessões ativas. Como o logout não revoga o JWT no servidor, a contenção mais eficaz é a **rotação do `AUTH_SECRET`**, que invalida todos os tokens emitidos.
+4. **Correção técnica:** MFA para contas administrativas, rate limiting no login e mecanismo de revogação de tokens; reverter alterações maliciosas identificadas nos logs.
+5. **Recuperação:** restaurar o banco a partir do backup anterior ao incidente; as migrations do Prisma garantem a integridade estrutural.
+6. **Prevenção:** MFA obrigatório para admins, rate limiting com bloqueio progressivo, revogação efetiva no logout e monitoramento ativo do `AuditLog` com alertas para IP/User-Agent não reconhecidos.
+
+---
+
+## 10. Plano de Backup e Restauração (resumo)
+
+> Resumo. O plano completo está em [`PLANO-BACKUP-RESTAURACAO.md`](./PLANO-BACKUP-RESTAURACAO.md).
+
+- **Banco (dev):** SQLite em arquivo único (`prisma/dev.db`). Backup = cópia periódica do arquivo para local seguro fora do versionamento (o `dev.db`/journal estão no `.gitignore`), gerando snapshots datados (ex.: `dev_backup_2026-06-22.db`).
+- **Estrutura:** versionada pelas **migrations do Prisma** (`prisma/migrations/`). Recriar do zero com `npx prisma migrate dev` (ou `npx prisma db push`); dados de demo via seed (`npx prisma db seed`).
+- **Produção (evolução):** com PostgreSQL, backups automatizados via `pg_dump`, point-in-time recovery e replicação.
+
+---
+
+## 11. Estado Atual (caráter parcial)
 
 A base de autenticação, a estrutura de pastas do front-end e a API estão implementadas. Conforme o checkpoint técnico (22/06), o back-end (`draft-backend`) já está versionado no GitHub, restando a integração final das telas do colaborador e do fluxo de aprovação.
 
